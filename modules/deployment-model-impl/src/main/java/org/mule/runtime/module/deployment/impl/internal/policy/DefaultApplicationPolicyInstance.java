@@ -10,17 +10,23 @@ package org.mule.runtime.module.deployment.impl.internal.policy;
 import static java.util.Optional.empty;
 import static java.util.Optional.of;
 import static org.mule.runtime.api.i18n.I18nMessageFactory.createStaticMessage;
+import static org.mule.runtime.api.store.ObjectStoreManager.BASE_IN_MEMORY_OBJECT_STORE_KEY;
+import static org.mule.runtime.api.store.ObjectStoreManager.BASE_PERSISTENT_OBJECT_STORE_KEY;
+import static org.mule.runtime.core.api.config.MuleProperties.OBJECT_LOCK_PROVIDER;
+import static org.mule.runtime.core.api.config.MuleProperties.OBJECT_POLICY_MANAGER_STATE_HANDLER;
+import static org.mule.runtime.core.api.config.MuleProperties.OBJECT_STORE_MANAGER;
+import static org.mule.runtime.core.api.config.MuleProperties.OBJECT_TIME_SUPPLIER;
 import static org.mule.runtime.core.api.config.bootstrap.ArtifactType.APP;
 import static org.mule.runtime.module.deployment.impl.internal.artifact.ArtifactContextBuilder.newBuilder;
 
 import org.mule.runtime.api.exception.MuleException;
 import org.mule.runtime.api.lifecycle.InitialisationException;
-import org.mule.runtime.core.api.config.MuleProperties;
 import org.mule.runtime.core.api.policy.DefaultPolicyInstance;
 import org.mule.runtime.core.api.policy.Policy;
 import org.mule.runtime.core.api.policy.PolicyInstance;
 import org.mule.runtime.core.api.policy.PolicyParametrization;
 import org.mule.runtime.core.api.policy.PolicyPointcut;
+import org.mule.runtime.core.api.registry.MuleRegistry;
 import org.mule.runtime.core.api.registry.RegistrationException;
 import org.mule.runtime.deployment.model.api.application.Application;
 import org.mule.runtime.deployment.model.api.artifact.ArtifactContext;
@@ -90,11 +96,26 @@ public class DefaultApplicationPolicyInstance implements ApplicationPolicyInstan
                                                                                      artifactPlugins,
                                                                                      new DefaultExtensionManagerFactory()));
 
-    artifactBuilder.withServiceConfigurator(customizationService -> customizationService
-        .overrideDefaultServiceImpl(MuleProperties.OBJECT_POLICY_MANAGER_STATE_HANDLER,
-                                    application.getMuleContext().getRegistry()
-                                        .lookupObject(MuleProperties.OBJECT_POLICY_MANAGER_STATE_HANDLER)));
-
+    artifactBuilder.withServiceConfigurator(customizationService -> {
+      MuleRegistry applicationRegistry = application.getMuleContext().getRegistry();
+      customizationService.overrideDefaultServiceImpl(OBJECT_LOCK_PROVIDER,
+                                                      applicationRegistry.lookupObject(OBJECT_LOCK_PROVIDER));
+      customizationService.overrideDefaultServiceImpl(OBJECT_STORE_MANAGER,
+                                                      applicationRegistry.lookupObject(OBJECT_STORE_MANAGER));
+      customizationService.overrideDefaultServiceImpl(BASE_PERSISTENT_OBJECT_STORE_KEY,
+                                                      applicationRegistry.lookupObject(BASE_PERSISTENT_OBJECT_STORE_KEY));
+      customizationService.overrideDefaultServiceImpl(BASE_IN_MEMORY_OBJECT_STORE_KEY,
+                                                      applicationRegistry.lookupObject(BASE_IN_MEMORY_OBJECT_STORE_KEY));
+      customizationService.overrideDefaultServiceImpl(OBJECT_POLICY_MANAGER_STATE_HANDLER,
+                                                      applicationRegistry.lookupObject(OBJECT_POLICY_MANAGER_STATE_HANDLER));
+      customizationService.overrideDefaultServiceImpl(OBJECT_TIME_SUPPLIER,
+                                                      applicationRegistry.lookupObject(OBJECT_TIME_SUPPLIER));
+      Object muleClusterManager = applicationRegistry.lookupObject("_muleClusterManager");
+      if (muleClusterManager != null) {
+        customizationService.registerCustomServiceImpl("_muleClusterManager", // TODO parameterize
+                                                       muleClusterManager);// CLUSTER_MANAGER_ID));
+      }
+    });
     try {
       policyContext = artifactBuilder.build();
       policyContext.getMuleContext().start();
