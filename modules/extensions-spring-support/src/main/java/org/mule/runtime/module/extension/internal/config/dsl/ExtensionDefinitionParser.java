@@ -640,15 +640,17 @@ public abstract class ExtensionDefinitionParser {
 
     ValueResolver resolver;
 
-    final Class<Object> expectedClass = getType(expectedType);
+    final Class<Object> expectedClass = ExtensionMetadataTypeUtils.getType(expectedType).orElse(Object.class);
 
-    boolean isExpression = isExpression(value, parser);
+    if (isExpression(value, parser)) {
+      resolver = getExpressionBasedValueResolver(expectedType, (String) value, modelProperties, expectedClass);
+      if (required) {
 
-    resolver = isExpression
-        ? getExpressionBasedValueResolver(expectedType, (String) value, modelProperties, expectedClass)
-        : getStaticValueResolver(parameterName, expectedType, value, defaultValue, modelProperties, acceptsReferences,
-                                 expectedClass);
-
+      }
+    } else {
+      resolver = getStaticValueResolver(parameterName, expectedType, value, defaultValue, modelProperties, acceptsReferences,
+                                        expectedClass);
+    }
 
     if (resolver.isDynamic() && expressionSupport == NOT_SUPPORTED) {
       throw new IllegalArgumentException(
